@@ -51,6 +51,9 @@ import java.io.File;
 import java.lang.management.ManagementFactory;
 import java.lang.management.RuntimeMXBean;
 import java.net.URI;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.*;
 import java.util.concurrent.*;
@@ -280,6 +283,23 @@ public class MainDisplay {
                         MAIN_FRAME.repaint();
                     })
             );
+            popupMenu.addSeparator();
+            popupMenu.add(new JMenuItem("Export to...")
+                    .handleIn(Platform::runLater, () -> {
+                        FileChooser fileChooser = new FileChooser();
+                        fileChooser.setTitle("Save " + declaredKey.getKeyName() + " to...");
+                        fileChooser.setInitialDirectory(KeyStorage.STORAGE);
+                        fileChooser.setInitialFileName(KeyStorage.dropIllegalCharacters(declaredKey.getKeyName()) + ".key");
+                        fileChooser.getExtensionFilters().addAll(
+                                new FileChooser.ExtensionFilter("Key Files", "*.key"),
+                                new FileChooser.ExtensionFilter("All Files", "*.*")
+                        );
+                        File file = fileChooser.showSaveDialog(null);
+                        if (file == null) return;
+                        KeyStorage.dumpKey(declaredKey, file);
+                        BottomMsgUpdater.nextDisplayMsg = "Exported " + declaredKey.getKeyName() + " to " + file;
+                    })
+            );
             popupMenu.show(event.getComponent(), event.getX(), event.getY());
         }
     }
@@ -500,6 +520,11 @@ public class MainDisplay {
                 file.add(new JMenuItem("Import key")
                         .handleIn(Platform::runLater, () -> {
                             FileChooser chooser = new FileChooser();
+                            chooser.setTitle("Import key...");
+                            chooser.getExtensionFilters().addAll(
+                                    new FileChooser.ExtensionFilter("Key Files", "*.key"),
+                                    new FileChooser.ExtensionFilter("All Files", "*.*")
+                            );
                             File selected = chooser.showOpenDialog(null);
                             if (selected == null) return;
                             try {
@@ -610,6 +635,30 @@ public class MainDisplay {
                 );
 
                 menuBar.add(view);
+            }
+            {
+                JMenu settings = new JMenu("Settings");
+
+                JMenu password = new JMenu("Password");
+
+                password.add(new JMenuItem("Change password")
+                        .handle(() -> {
+                            changePassword();
+                            Configuration.save();
+                            KeyStorage.KEYS.keySet().forEach(KeyStorage::saveKey);
+                        })
+                );
+                password.add(new JMenuItem("Change password and reload")
+                        .handle(() -> {
+                            changePassword();
+                            Configuration.save();
+                            KeyStorage.reloadKeys();
+                        })
+                );
+
+                settings.add(password);
+
+                menuBar.add(settings);
             }
             {
                 JMenu help = new JMenu("Help");
@@ -778,6 +827,7 @@ public class MainDisplay {
     public static void main(String[] args) {
         Platform.startup(() -> {
         });
+        Configuration.reload();
         //System.setProperty("org.lwjgl.util.Debug", "true");
         //System.setProperty("org.lwjgl.util.DebugLoader", "true");
         initialize();
@@ -785,6 +835,7 @@ public class MainDisplay {
         MAIN_FRAME.setLocationRelativeTo(null);
         MAIN_FRAME.setVisible(true);
         startScheduler();
+        doFirstStartInit();
 
         KeyStorage.reloadKeys();
     }
@@ -847,6 +898,7 @@ public class MainDisplay {
                         "JavaFX", "https://github.com/openjdk/jfx", null, null,
                         "FlatLaf", "https://github.com/JFormDesigner/FlatLaf/", "Apache-2.0 License", "https://github.com/JFormDesigner/FlatLaf/blob/main/LICENSE",
                         "MigLayout", "https://github.com/mikaelgrev/miglayout", null, null,
+                        "SpongePowered/Configurate", "https://github.com/SpongePowered/Configurate", "Apache-2.0 License", "https://github.com/SpongePowered/Configurate/blob/master/LICENSE",
                 };
 
                 int lined = libraries.length;
@@ -924,4 +976,35 @@ public class MainDisplay {
         }
     }
 
+    private static void changePassword() {
+        JPasswordField pwd = new JPasswordField();
+        JOptionPane.showMessageDialog(
+                MAIN_FRAME,
+                pwd,
+                "Please setup a password",
+                JOptionPane.WARNING_MESSAGE
+        );
+        char[] pwd0 = pwd.getPassword();
+        if (pwd0.length == 0) {
+            JOptionPane.showMessageDialog(MAIN_FRAME, "No password setup. Your keys will save with raw format.");
+            KeyStorage.passwd = null;
+            Configuration.INSTANCE.passwordProtected = false;
+        } else {
+            Configuration.INSTANCE.passwordProtected = true;
+            ByteBuffer bb = StandardCharsets.UTF_8.encode(
+                    CharBuffer.wrap(pwd0)
+            );
+            byte[] pwd1 = new byte[bb.remaining()];
+            bb.get(pwd1);
+            KeyStorage.passwd = pwd1;
+        }
+    }
+
+    private static void doFirstStartInit() {
+        if (!Configuration.INSTANCE.firstUse) return;
+        changePassword();
+
+        Configuration.INSTANCE.firstUse = false;
+        Configuration.save();
+    }
 }

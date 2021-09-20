@@ -8,6 +8,7 @@ Desktop application powered by
 - [JavaFX](https://github.com/openjdk/jfx)
 - [ZXing](https://github.com/zxing/zxing)
 - [MigLayout](https://github.com/mikaelgrev/miglayout)
+- [SpongePowered/Configurate](https://github.com/SpongePowered/Configurate)
 
 # Build & Run Desktop Application
 

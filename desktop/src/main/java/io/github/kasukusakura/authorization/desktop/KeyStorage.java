@@ -22,6 +22,9 @@ import io.github.kasukusakura.authorization.IAuthorizationService;
 import javax.swing.*;
 import java.awt.*;
 import java.io.*;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 import java.util.Map;
@@ -30,6 +33,7 @@ import java.util.regex.Pattern;
 import static io.github.kasukusakura.authorization.desktop.MainDisplay.MAIN_FRAME;
 
 public class KeyStorage {
+    static byte[] passwd;
     private static final Pattern PATTERN_NORMAL_NAME = Pattern.compile(
             "[^A-Za-z0-9_\\-]", Pattern.CASE_INSENSITIVE
     );
@@ -45,7 +49,9 @@ public class KeyStorage {
     public static Map<IAuthorizationKey, File> KEYS = new HashMap<>();
 
     public static void loadKey(File keyFile, boolean external) {
-        try (DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream(keyFile)))) {
+        try (DataInputStream dis = new DataInputStream(new BufferedInputStream(
+                BFStream.dec(new FileInputStream(keyFile), external ? null : passwd)
+        ))) {
             String type = dis.readUTF();
             IAuthorizationService service = MainDisplay.AUTH_MANAGER.getAuthorizationService(type);
             if (service == null) {
@@ -64,7 +70,24 @@ public class KeyStorage {
             RuntimeException re = new RuntimeException("Exception in reading key: " + keyFile, e);
             if (external) throw re;
             re.printStackTrace();
+            MainDisplay.BottomMsgUpdater.nextDisplayMsg = e.toString();
         }
+    }
+
+    private static void readPasswd() {
+        JPasswordField pwd = new JPasswordField();
+        JOptionPane.showMessageDialog(
+                MainDisplay.MAIN_FRAME,
+                pwd,
+                "Please input your password",
+                JOptionPane.PLAIN_MESSAGE
+        );
+        ByteBuffer bb = StandardCharsets.UTF_8.encode(
+                CharBuffer.wrap(pwd.getPassword())
+        );
+        byte[] rd = new byte[bb.remaining()];
+        bb.get(rd);
+        passwd = rd;
     }
 
     public static void reloadKeys() {
@@ -76,8 +99,12 @@ public class KeyStorage {
             }
             return true;
         });
-
         KEYS.clear();
+
+        if (Configuration.INSTANCE.passwordProtected && passwd == null) {
+            readPasswd();
+        }
+
         File[] listFiles = KEYS_STORAGE.listFiles();
         if (listFiles == null) return;
         for (File keyFile : listFiles) {
@@ -92,7 +119,11 @@ public class KeyStorage {
         if (file == null) {
             KEYS.put(key, file = sokName(key));
         }
-        save(key, file);
+        save(key, file, false);
+    }
+
+    public static void dumpKey(IAuthorizationKey key, File target) {
+        save(key, target, true);
     }
 
     public static void deleteKey(IAuthorizationKey key) {
@@ -100,8 +131,12 @@ public class KeyStorage {
         if (file != null) file.delete();
     }
 
+    public static String dropIllegalCharacters(String n) {
+        return PATTERN_NORMAL_NAME.matcher(n).replaceAll("_");
+    }
+
     private static File sokName(IAuthorizationKey key) {
-        String n = PATTERN_NORMAL_NAME.matcher(key.getKeyName()).replaceAll("_");
+        String n = dropIllegalCharacters(key.getKeyName());
         int counter = 0;
         File sf = new File(KEYS_STORAGE, n + ".key");
         do {
@@ -112,11 +147,11 @@ public class KeyStorage {
         } while (true);
     }
 
-    private static void save(IAuthorizationKey key, File file) {
-        STORAGE.mkdirs();
-        try (DataOutputStream dos = new DataOutputStream(
-                new BufferedOutputStream(new FileOutputStream(file))
-        )) {
+    private static void save(IAuthorizationKey key, File file, boolean ext) {
+        KEYS_STORAGE.mkdirs();
+        try (DataOutputStream dos = new DataOutputStream(new BufferedOutputStream(
+                BFStream.enc(new FileOutputStream(file), ext ? null : passwd)
+        ))) {
             dos.writeUTF(key.getService().getName());
             key.serialize(dos);
         } catch (Exception e) {
