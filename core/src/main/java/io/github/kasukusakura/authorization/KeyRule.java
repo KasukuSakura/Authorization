@@ -27,8 +27,24 @@ public class KeyRule {
     }
 
     public Type type = Type.TEXT;
+
+    /**
+     * The default value of this rule
+     *
+     * @apiNote {@link Boolean} type required if {@link #type} is {@link Type#BOOLEAN}
+     */
     public Object value;
+
+    /**
+     * Options list
+     *
+     * @apiNote required if {@link #type} is {@link Type#COMBO_LIST}
+     */
     public List<String> options;
+
+    /**
+     * The description of this rule
+     */
     public String description;
 
     //region
@@ -46,6 +62,7 @@ public class KeyRule {
         this.options = options;
         return this;
     }
+
     public KeyRule options(String... options) {
         return options(Arrays.asList(options));
     }

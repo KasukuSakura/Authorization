@@ -20,6 +20,9 @@ import io.github.kasukusakura.authorization.internal.AuthManagerImpl;
 
 import java.util.Map;
 
+/**
+ * The manager that manage all 2FA services.
+ */
 public abstract class AuthManager {
     public abstract Map<String, IAuthorizationService> getAuthorizationServices();
 

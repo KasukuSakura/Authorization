@@ -17,10 +17,80 @@
 plugins {
     id 'java'
     id 'maven-publish'
+    id 'io.github.karlatemp.publication-sign'
 }
 
 
 compileJava {
     sourceCompatibility = JavaVersion.VERSION_1_8
     targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+tasks.create("sourcesJar", Jar.class) { tsk ->
+    tsk.dependsOn("classes")
+    tsk.archiveClassifier.set('sources')
+    tsk.from project.sourceSets.main.allSource
+}
+
+tasks.create("javadocJar", Jar.class) { tsk ->
+    tsk.archiveClassifier.set('javadoc')
+}
+
+publishing {
+    repositories {
+        maven {
+            setName("MavenCentral")
+            // Maven Central
+            setUrl("https://s01.oss.sonatype.org/service/local/staging/deploy/maven2")
+
+            credentials {
+                def prop = { name ->
+                    if (rootProject.hasProperty(name)) {
+                        return rootProject.property(name)
+                    }
+                    return ""
+                }
+                username = prop('sonatype.user')
+                password = prop('sonatype.key')
+            }
+
+            metadataSources.ignoreGradleMetadataRedirection()
+        }
+
+        mavenLocal {
+            metadataSources.ignoreGradleMetadataRedirection()
+        }
+
+    }
+
+    publications { container ->
+        register("java", MavenPublication.class) { publication ->
+            publication.artifact(tasks.findByName('sourcesJar'))
+            publication.artifact(tasks.findByName('javadocJar'))
+            publication.setModuleDescriptorGenerator(null)
+            publication.artifactId('authorization-core')
+
+            publication.pom {
+                name = 'Authorization'
+                description = "KeyStorage"
+                url = 'https://github.com/KasukuSakura/Authorization'
+                licenses {
+                    license {
+                        name = 'Apache 2.0 License'
+                        url = 'https://www.apache.org/licenses/LICENSE-2.0'
+                    }
+                }
+                developers {
+                    developer {
+                        name = 'Karlatemp'
+                        email = 'karlatemp@vip.qq.com'
+                    }
+                }
+                scm {
+                    url = 'https://github.com/KasukuSakura/Authorization.git'
+                    connection = 'https://github.com/KasukuSakura/Authorization.git'
+                }
+            }
+        }
+    }
 }
